@@ -20,4 +20,6 @@ async function bootstrap() {
   console.log(`[AUTH-SERVICE] Inicializado internamente en el puerto 3000`);
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('[AUTH-SERVICE] Error during bootstrap:', err);
+});
