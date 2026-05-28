@@ -6,7 +6,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Prefijo obligatorio para el enrutamiento del Proxy de NGINX
-  app.setGlobalPrefix('api/auth');
+  app.setGlobalPrefix('api');
 
   // Habilitar tuberías de validación global
   app.useGlobalPipes(
