@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
@@ -18,6 +19,7 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly jwtService: JwtService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -81,30 +83,30 @@ export class AuthService {
     const { email, password } = loginDto;
 
     try {
-      // 1. Buscar al usuario en la base de datos por su correo electrónico
       const user = await this.userRepository.findOne({ where: { email } });
 
-      // 2. Si no existe, lanzamos un error 401 (No autorizado)
-      // 💡 BUENA PRÁCTICA: Usar un mensaje genérico ("Credenciales no válidas")
-      // para no revelar si el correo existe o no en el sistema.
       if (!user) {
         throw new UnauthorizedException('Credenciales no válidas.');
       }
 
-      // 3. Comparar la contraseña ingresada con el hash guardado en Postgres
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
         throw new UnauthorizedException('Credenciales no válidas.');
       }
 
-      // 4. Si las credenciales son correctas, preparamos la respuesta segura
+      const payload = {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+      };
+
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password: _, ...userResponse } = user;
 
       return {
         message: 'Inicio de sesión exitoso.',
         user: userResponse,
-        // TODO: En la Semana 3 inyectaremos el JwtService aquí para generar el token
+        token: this.jwtService.sign(payload),
       };
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
