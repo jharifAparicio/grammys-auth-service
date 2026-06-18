@@ -26,24 +26,24 @@ export class AuthService {
     const { email, password, username, fullName } = registerDto;
 
     try {
-      // 1. Verificar si el usuario ya existe en PostgreSQL
+      // 1. Verificar si el usuario ya existe en PostgreSQL, incluyendo eliminados (baja lógica)
       const existingUser = await this.userRepository.findOne({
         where: { email },
+        withDeleted: true,
       });
       if (existingUser) {
-        if (!existingUser.isActive) {
-          existingUser.isActive = true;
+        if (existingUser.deletedAt !== null) {
+          await this.userRepository.restore(existingUser.id);
           existingUser.password = await bcrypt.hash(password, 10);
           if (username) existingUser.username = username;
           if (fullName) existingUser.fullName = fullName;
+          existingUser.deletedAt = null;
 
           await this.userRepository.save(existingUser);
 
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { password: __, ...userResponse } = existingUser;
           return {
             message: 'Tu cuenta anterior ha sido reactivada con éxito.',
-            user: userResponse,
+            user: existingUser,
           };
         }
         throw new ConflictException(
@@ -64,11 +64,9 @@ export class AuthService {
 
       await this.userRepository.save(newUser);
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { password: _, ...userResponse } = newUser;
       return {
         message: 'Usuario registrado exitosamente.',
-        user: userResponse,
+        user: newUser,
       };
     } catch (error) {
       if (error instanceof ConflictException) throw error;
@@ -100,12 +98,9 @@ export class AuthService {
         fullName: user.fullName,
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { password: _, ...userResponse } = user;
-
       return {
         message: 'Inicio de sesión exitoso.',
-        user: userResponse,
+        user: user,
         token: this.jwtService.sign(payload),
       };
     } catch (error) {
@@ -119,11 +114,7 @@ export class AuthService {
   // 🟢 READ: Obtener todos los usuarios activos
   async findAll() {
     try {
-      const users = await this.userRepository.find({
-        where: { isActive: true },
-      });
-      // eslint-disable-next-line
-      return users.map(({ password: _, ...user }) => user);
+      return await this.userRepository.find();
     } catch (error) {
       console.log(error);
       throw new InternalServerErrorException('Error al obtener los usuarios.');
@@ -133,22 +124,20 @@ export class AuthService {
   // 🟢 READ: Obtener un usuario específico por ID
   async findOne(id: string) {
     const user = await this.userRepository.findOne({
-      where: { id, isActive: true },
+      where: { id },
     });
     if (!user) {
       throw new NotFoundException(
         `Usuario con ID ${id} no encontrado o está inactivo.`,
       );
     }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: _, ...userResponse } = user;
-    return userResponse;
+    return user;
   }
 
   // 🟢 UPDATE: Modificar el perfil de un usuario
   async update(id: string, updateUserDto: UpdateUserDto) {
     const user = await this.userRepository.findOne({
-      where: { id, isActive: true },
+      where: { id },
     });
     if (!user) throw new NotFoundException(`Usuario no encontrado.`);
 
@@ -174,11 +163,9 @@ export class AuthService {
 
       await this.userRepository.save(user);
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { password: _, ...userResponse } = user;
       return {
         message: 'Usuario actualizado exitosamente.',
-        user: userResponse,
+        user: user,
       };
     } catch (error) {
       if (error instanceof ConflictException) throw error;
@@ -189,13 +176,11 @@ export class AuthService {
   // 🟢 DELETE: Baja lógica de un usuario (Soft Delete)
   async remove(id: string) {
     const user = await this.userRepository.findOne({
-      where: { id, isActive: true },
+      where: { id },
     });
     if (!user) throw new NotFoundException(`Usuario no encontrado.`);
 
-    // En lugar de usar remove(), cambiamos el estado a falso
-    user.isActive = false;
-    await this.userRepository.save(user);
+    await this.userRepository.softDelete(id);
 
     return {
       message: `El usuario con ID ${id} ha sido dado de baja correctamente.`,

@@ -4,7 +4,9 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 
 @Entity('users')
 export class User {
@@ -14,6 +16,7 @@ export class User {
   @Column({ unique: true, type: 'varchar', length: 255 })
   email: string;
 
+  @Exclude()
   @Column({ type: 'varchar', length: 255 })
   password: string;
 
@@ -23,9 +26,10 @@ export class User {
   @Column({ type: 'varchar', length: 100, nullable: true })
   fullName: string;
 
-  // 🟢 NUEVO: Flag para control de baja lógica (Soft Delete)
-  @Column({ type: 'boolean', default: true })
-  isActive: boolean;
+  // 🟢 MODIFICADO: Baja lógica gestionada por TypeORM (Soft Delete)
+  @Exclude()
+  @DeleteDateColumn({ type: 'timestamp', nullable: true })
+  deletedAt: Date | null;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;
